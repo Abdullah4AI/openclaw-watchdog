@@ -128,7 +128,7 @@ def diagnose_locally(logs: str) -> str:
     if "segfault" in lines or "segmentation fault" in lines:
         issues.append("Segmentation fault — possible corrupted installation")
     if "module not found" in lines or "cannot find module" in lines:
-        issues.append("Missing Node.js module — try: npm install -g openclaw")
+        issues.append("Missing Node.js module — may need manual reinstallation")
     if not issues:
         issues.append("No obvious pattern detected — check logs manually")
     return "; ".join(issues)
@@ -193,30 +193,13 @@ async def attempt_fix(session: aiohttp.ClientSession, cfg: dict, attempt: int) -
         await asyncio.sleep(10)
         return await check_health(session)
 
-    elif attempt == 3:
-        # Step 3: Kill + restart
-        log.info("Force-killing and restarting gateway...")
-        await send_telegram(session, cfg, "🔧 <b>Watch Dog:</b> Force-killing gateway process...")
-        try:
-            subprocess.run(["pkill", "-f", "openclaw"], capture_output=True)
-            await asyncio.sleep(3)
-            subprocess.run(["openclaw", "gateway", "start"], timeout=30,
-                           capture_output=True, text=True)
-        except Exception as e:
-            log.error("Force restart failed: %s", e)
-            return False
-
-        await asyncio.sleep(10)
-        return await check_health(session)
-
     else:
-        # Step 4+: Escalate to user — no auto-reinstall for safety
-        log.info("All restart attempts exhausted, notifying user...")
+        # Step 3+: Escalate to user — no force-kill or reinstall for safety
+        log.info("Restart attempts exhausted, notifying user...")
         await send_telegram(session, cfg,
-            "⚠️ <b>Watch Dog:</b> All restart attempts failed.\n"
+            "⚠️ <b>Watch Dog:</b> Gateway restart failed after %d attempts.\n"
             "Manual intervention required — try running:\n"
-            "<code>openclaw gateway restart</code>\n"
-            "or reinstall manually if needed."
+            "<code>openclaw gateway restart</code>" % attempt
         )
         return False
 

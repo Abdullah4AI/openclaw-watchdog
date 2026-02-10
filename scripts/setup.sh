@@ -77,17 +77,18 @@ info "Dependencies installed"
 info "Encrypting credentials"
 PASSWORD=$(machine_password)
 
-CONFIG_JSON=$(cat <<EOF
-{
-  "telegram_token": "$TELEGRAM_TOKEN",
-  "telegram_chat_id": "$TELEGRAM_CHAT_ID",
-  "openai_key": "$OPENAI_KEY",
-  "anthropic_key": "$ANTHROPIC_KEY"
-}
-EOF
-)
+# Build JSON safely via Python to prevent shell injection
+CONFIG_JSON=$(python3 -c "
+import json, sys
+print(json.dumps({
+    'telegram_token': sys.argv[1],
+    'telegram_chat_id': sys.argv[2],
+    'openai_key': sys.argv[3],
+    'anthropic_key': sys.argv[4]
+}))
+" "$TELEGRAM_TOKEN" "$TELEGRAM_CHAT_ID" "$OPENAI_KEY" "$ANTHROPIC_KEY")
 
-echo "$CONFIG_JSON" | openssl enc -aes-256-cbc -pbkdf2 -pass "pass:$PASSWORD" -out "$CONFIG_ENC"
+printf '%s' "$CONFIG_JSON" | openssl enc -aes-256-cbc -pbkdf2 -pass "pass:$PASSWORD" -out "$CONFIG_ENC"
 chmod 600 "$CONFIG_ENC"
 info "Credentials encrypted at $CONFIG_ENC"
 

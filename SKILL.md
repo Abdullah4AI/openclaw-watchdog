@@ -1,6 +1,12 @@
 # openclaw-watchdog
 
-**Description:** Self-healing monitoring system for OpenClaw gateway. Monitors health, auto-restarts on failure, and sends Telegram alerts. All diagnostics run locally — no data leaves the device. Use when user wants to set up gateway monitoring, watchdog, or auto-recovery.
+**Description:** Self-healing monitoring system for OpenClaw gateway. Monitors health, auto-restarts on failure, and sends Telegram alerts. Diagnostics and log analysis run locally on-device. Alert notifications are sent to the user's Telegram bot. Use when user wants to set up gateway monitoring, watchdog, or auto-recovery.
+
+## Prerequisites
+- **Telegram Bot Token** — Create via [@BotFather](https://t.me/BotFather)
+- **Telegram Chat ID** — Your personal chat ID for receiving alerts
+- **Python 3** — Required for the watchdog service
+- **OpenClaw** — Installed and running
 
 ## Trigger Keywords
 - watchdog, monitoring, auto-fix, gateway health, self-healing, auto-recovery, watch dog

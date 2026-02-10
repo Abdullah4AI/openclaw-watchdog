@@ -110,63 +110,28 @@ async def send_telegram(session: aiohttp.ClientSession, cfg: dict, text: str):
 
 
 # ---------------------------------------------------------------------------
-# AI Diagnostics
+# Local Diagnostics (no external API calls — logs stay on device)
 # ---------------------------------------------------------------------------
 
-async def diagnose_with_ai(session: aiohttp.ClientSession, cfg: dict, logs: str) -> str:
-    """Use Claude or OpenAI to analyze failure logs."""
-    prompt = (
-        "You are an expert at diagnosing OpenClaw gateway failures. "
-        "Analyze these logs and give a brief diagnosis + recommended fix:\n\n"
-        f"```\n{logs[-3000:]}\n```"
-    )
-
-    # Try Claude first
-    anthropic_key = cfg.get("anthropic_key", "")
-    if anthropic_key:
-        try:
-            async with session.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": anthropic_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": "claude-sonnet-4-20250514",
-                    "max_tokens": 500,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data["content"][0]["text"]
-        except Exception as e:
-            log.warning("Claude diagnostics failed: %s", e)
-
-    # Fallback to OpenAI
-    openai_key = cfg.get("openai_key", "")
-    if openai_key:
-        try:
-            async with session.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {openai_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "gpt-4o-mini",
-                    "max_tokens": 500,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data["choices"][0]["message"]["content"]
-        except Exception as e:
-            log.warning("OpenAI diagnostics failed: %s", e)
-
-    return "AI diagnostics unavailable — check API keys."
+def diagnose_locally(logs: str) -> str:
+    """Analyze logs locally using pattern matching. No data leaves the device."""
+    lines = logs.lower()
+    issues = []
+    if "eaddrinuse" in lines:
+        issues.append("Port already in use — another process may be bound to the gateway port")
+    if "enomem" in lines or "out of memory" in lines:
+        issues.append("Out of memory — consider freeing resources or restarting the machine")
+    if "enoent" in lines or "not found" in lines:
+        issues.append("Missing file or binary — OpenClaw may need reinstallation")
+    if "permission denied" in lines or "eacces" in lines:
+        issues.append("Permission denied — check file/directory permissions")
+    if "segfault" in lines or "segmentation fault" in lines:
+        issues.append("Segmentation fault — possible corrupted installation")
+    if "module not found" in lines or "cannot find module" in lines:
+        issues.append("Missing Node.js module — try: npm install -g openclaw")
+    if not issues:
+        issues.append("No obvious pattern detected — check logs manually")
+    return "; ".join(issues)
 
 
 # ---------------------------------------------------------------------------
@@ -245,21 +210,15 @@ async def attempt_fix(session: aiohttp.ClientSession, cfg: dict, attempt: int) -
         return await check_health(session)
 
     else:
-        # Step 4+: Full reinstall
-        log.info("Attempting full reinstall...")
-        await send_telegram(session, cfg, "🔧 <b>Watch Dog:</b> Attempting full OpenClaw reinstall...")
-        try:
-            subprocess.run(["npm", "install", "-g", "openclaw"], timeout=120,
-                           capture_output=True, text=True)
-            await asyncio.sleep(5)
-            subprocess.run(["openclaw", "gateway", "start"], timeout=30,
-                           capture_output=True, text=True)
-        except Exception as e:
-            log.error("Reinstall failed: %s", e)
-            return False
-
-        await asyncio.sleep(15)
-        return await check_health(session)
+        # Step 4+: Escalate to user — no auto-reinstall for safety
+        log.info("All restart attempts exhausted, notifying user...")
+        await send_telegram(session, cfg,
+            "⚠️ <b>Watch Dog:</b> All restart attempts failed.\n"
+            "Manual intervention required — try running:\n"
+            "<code>openclaw gateway restart</code>\n"
+            "or reinstall manually if needed."
+        )
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +291,7 @@ async def main():
                 if state["consecutive_failures"] == 3:
                     # First failure notification with diagnostics
                     logs = collect_logs()
-                    diagnosis = await diagnose_with_ai(session, cfg, logs)
+                    diagnosis = diagnose_locally(logs)
                     await send_telegram(session, cfg,
                         "🚨 <b>Gateway DOWN!</b>\n"
                         f"3 consecutive failures detected.\n\n"

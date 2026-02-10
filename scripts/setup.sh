@@ -33,7 +33,7 @@ done
 
 [[ -z "$TELEGRAM_TOKEN" ]] && error "Missing --telegram-token"
 [[ -z "$TELEGRAM_CHAT_ID" ]] && error "Missing --telegram-chat-id"
-[[ -z "$OPENAI_KEY" && -z "$ANTHROPIC_KEY" ]] && error "Need at least one AI key (--openai-key or --anthropic-key)"
+# AI keys are optional (used for future extensions only)
 
 # ---------------------------------------------------------------------------
 # Machine-specific password (must match watchdog.py logic)
@@ -68,7 +68,7 @@ chmod +x "$WATCHDOG_DIR/watchdog.py"
 info "Setting up Python virtual environment"
 python3 -m venv "$VENV_DIR"
 "$VENV_DIR/bin/pip" install --quiet --upgrade pip
-"$VENV_DIR/bin/pip" install --quiet aiohttp anthropic openai
+"$VENV_DIR/bin/pip" install --quiet aiohttp
 info "Dependencies installed"
 
 # ---------------------------------------------------------------------------

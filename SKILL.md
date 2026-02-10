@@ -72,7 +72,9 @@ Tell them Watch Dog is active, what it monitors, and that they'll get Telegram a
 
 - Pings `localhost:3117/health` every 15 seconds
 - After 3 consecutive failures, attempts `openclaw gateway restart`
-- Up to 2 restart attempts, then escalates to user via Telegram
+- Up to 2 restart attempts, then asks user for reinstall permission via Telegram
+- User approves by running: `touch ~/.openclaw/watchdog/approve-reinstall`
+- Without approval, only sends notifications — no destructive actions
 - Local pattern-matching diagnostics (no logs sent externally)
 - Runs as macOS LaunchAgent or Linux systemd user service
 - Credentials encrypted with AES-256 using machine-specific key

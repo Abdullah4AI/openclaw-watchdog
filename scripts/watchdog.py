@@ -27,6 +27,7 @@ CONFIG_FILE = WATCHDOG_DIR / "config.enc"
 LOG_FILE = WATCHDOG_DIR / "watchdog.log"
 STATE_FILE = WATCHDOG_DIR / "state.json"
 GATEWAY_HEALTH = "http://127.0.0.1:3117/health"
+APPROVE_REINSTALL = WATCHDOG_DIR / "approve-reinstall"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -193,14 +194,45 @@ async def attempt_fix(session: aiohttp.ClientSession, cfg: dict, attempt: int) -
         await asyncio.sleep(10)
         return await check_health(session)
 
-    else:
-        # Step 3+: Escalate to user — no force-kill or reinstall for safety
-        log.info("Restart attempts exhausted, notifying user...")
+    elif attempt == 3:
+        # Step 3: Ask user for permission to reinstall
+        log.info("Restart attempts exhausted, asking user for reinstall permission...")
         await send_telegram(session, cfg,
-            "⚠️ <b>Watch Dog:</b> Gateway restart failed after %d attempts.\n"
-            "Manual intervention required — try running:\n"
-            "<code>openclaw gateway restart</code>" % attempt
+            "⚠️ <b>Watch Dog:</b> Gateway restart failed after 2 attempts.\n\n"
+            "Reinstalling OpenClaw might fix the issue.\n"
+            "To approve reinstall, run:\n"
+            "<code>touch ~/.openclaw/watchdog/approve-reinstall</code>\n\n"
+            "I'll check for your approval and proceed if given."
         )
+        return False
+
+    elif attempt <= 5 and APPROVE_REINSTALL.exists():
+        # Step 4-5: User approved reinstall
+        log.info("User approved reinstall, running npm install -g openclaw...")
+        APPROVE_REINSTALL.unlink(missing_ok=True)
+        await send_telegram(session, cfg, "🔧 <b>Watch Dog:</b> Reinstalling OpenClaw (approved by user)...")
+        try:
+            subprocess.run(["npm", "install", "-g", "openclaw"], timeout=120,
+                           capture_output=True, text=True)
+            await asyncio.sleep(5)
+            subprocess.run(["openclaw", "gateway", "start"], timeout=30,
+                           capture_output=True, text=True)
+        except Exception as e:
+            log.error("Reinstall failed: %s", e)
+            return False
+
+        await asyncio.sleep(10)
+        return await check_health(session)
+
+    else:
+        # No approval or attempts exhausted — notify user
+        log.info("Waiting for user action...")
+        if attempt == 5:
+            await send_telegram(session, cfg,
+                "❌ <b>Watch Dog:</b> All auto-fix attempts exhausted.\n"
+                "Manual intervention required:\n"
+                "<code>openclaw gateway restart</code>"
+            )
         return False
 
 

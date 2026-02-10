@@ -31,8 +31,14 @@ Run these steps in order:
 
 ### 1. Validate credentials
 ```bash
-# Test Telegram bot token
-curl -s "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getMe" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok'), 'Invalid Telegram token'"
+# Test Telegram bot token (uses Python to safely handle user input)
+python3 -c "
+import urllib.request, json, sys
+token = sys.argv[1]
+resp = json.loads(urllib.request.urlopen(f'https://api.telegram.org/bot{token}/getMe').read())
+assert resp.get('ok'), 'Invalid Telegram token'
+print('Token valid:', resp['result']['username'])
+" "$TELEGRAM_TOKEN"
 ```
 
 ### 2. Run setup script
@@ -45,10 +51,16 @@ chmod +x ~/.openclaw/workspace/openclaw-watchdog/scripts/setup.sh
 
 ### 3. Connect via Telegram (Pairing)
 ```bash
-# Send a test message to verify the bot is connected to the user
-curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-  -H "Content-Type: application/json" \
-  -d "{\"chat_id\": \"${CHAT_ID}\", \"text\": \"🐕 Watch Dog connected successfully! I'll monitor your OpenClaw gateway 24/7 and alert you here if anything goes wrong.\"}"
+# Send a test message (uses Python to safely handle user input)
+python3 -c "
+import urllib.request, json, sys
+token, chat_id = sys.argv[1], sys.argv[2]
+data = json.dumps({'chat_id': chat_id, 'text': '🐕 Watch Dog connected successfully! Monitoring your gateway 24/7.'}).encode()
+req = urllib.request.Request(f'https://api.telegram.org/bot{token}/sendMessage', data=data, headers={'Content-Type': 'application/json'})
+resp = json.loads(urllib.request.urlopen(req).read())
+assert resp.get('ok'), 'Failed to send message'
+print('Test message sent!')
+" "$TELEGRAM_TOKEN" "$CHAT_ID"
 ```
 Wait for user to confirm they received the Telegram message before proceeding.
 

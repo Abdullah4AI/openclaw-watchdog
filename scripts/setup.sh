@@ -99,64 +99,39 @@ PYTHON_BIN="$VENV_DIR/bin/python3"
 WATCHDOG_PY="$WATCHDOG_DIR/watchdog.py"
 
 if [[ "$(uname)" == "Darwin" ]]; then
-    # macOS LaunchAgent
+    # macOS LaunchAgent — generate plist safely via Python (no shell interpolation)
     PLIST="$HOME/Library/LaunchAgents/com.openclaw.watchdog.plist"
     info "Installing LaunchAgent → $PLIST"
     mkdir -p "$HOME/Library/LaunchAgents"
-    cat > "$PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.openclaw.watchdog</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$PYTHON_BIN</string>
-        <string>$WATCHDOG_PY</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>$WATCHDOG_DIR/watchdog.log</string>
-    <key>StandardErrorPath</key>
-    <string>$WATCHDOG_DIR/watchdog-error.log</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
-    </dict>
-</dict>
-</plist>
-PLIST
+    python3 -c "
+import plistlib, sys
+plist = {
+    'Label': 'com.openclaw.watchdog',
+    'ProgramArguments': [sys.argv[1], sys.argv[2]],
+    'RunAtLoad': True,
+    'KeepAlive': True,
+    'StandardOutPath': sys.argv[3] + '/watchdog.log',
+    'StandardErrorPath': sys.argv[3] + '/watchdog-error.log',
+    'EnvironmentVariables': {
+        'PATH': '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin'
+    }
+}
+with open(sys.argv[4], 'wb') as f:
+    plistlib.dump(plist, f)
+" "$PYTHON_BIN" "$WATCHDOG_PY" "$WATCHDOG_DIR" "$PLIST"
 
     launchctl unload "$PLIST" 2>/dev/null || true
     launchctl load "$PLIST"
     info "LaunchAgent loaded"
 
 else
-    # Linux systemd user service
+    # Linux systemd user service — write via printf (no heredoc interpolation)
     SERVICE_DIR="$HOME/.config/systemd/user"
     SERVICE_FILE="$SERVICE_DIR/openclaw-watchdog.service"
     info "Installing systemd service → $SERVICE_FILE"
     mkdir -p "$SERVICE_DIR"
-    cat > "$SERVICE_FILE" <<UNIT
-[Unit]
-Description=OpenClaw Watch Dog
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$PYTHON_BIN $WATCHDOG_PY
-Restart=always
-RestartSec=10
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
-
-[Install]
-WantedBy=default.target
-UNIT
+    printf '[Unit]\nDescription=OpenClaw Watch Dog\nAfter=network.target\n\n[Service]\nType=simple\nExecStart=%s %s\nRestart=always\nRestartSec=10\nEnvironment=PATH=/usr/local/bin:/usr/bin:/bin\n\n[Install]\nWantedBy=default.target\n' \
+        "$PYTHON_BIN" "$WATCHDOG_PY" > "$SERVICE_FILE"
 
     systemctl --user daemon-reload
     systemctl --user enable openclaw-watchdog

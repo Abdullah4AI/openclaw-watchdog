@@ -5,10 +5,11 @@ homepage: https://github.com/Abdullah4AI/openclaw-watchdog
 metadata:
   openclaw:
     emoji: "🐕"
+    disableModelInvocation: true
     requires:
       bins: ["python3", "openssl"]
       env:
-        - name: TELEGRAM_BOT_TOKEN
+        - name: TELEGRAM_TOKEN
           description: "Telegram bot token from @BotFather for sending alerts"
           required: true
         - name: TELEGRAM_CHAT_ID
@@ -18,7 +19,7 @@ metadata:
       - id: setup
         kind: script
         script: "scripts/setup.sh"
-        args: ["--telegram-token", "$TELEGRAM_BOT_TOKEN", "--telegram-chat-id", "$TELEGRAM_CHAT_ID"]
+        args: ["--telegram-token", "$TELEGRAM_TOKEN", "--telegram-chat-id", "$TELEGRAM_CHAT_ID"]
         label: "Install watchdog service (LaunchAgent/systemd user)"
         persistence: "user-level"
         service: true
@@ -78,7 +79,7 @@ print('Token valid:', resp['result']['username'])
 chmod +x ~/.openclaw/workspace/openclaw-watchdog/scripts/setup.sh
 ~/.openclaw/workspace/openclaw-watchdog/scripts/setup.sh \
   --telegram-token "$TELEGRAM_TOKEN" \
-  --telegram-chat-id "$CHAT_ID"
+  --telegram-chat-id "$TELEGRAM_CHAT_ID"
 ```
 
 ### 3. Connect via Telegram (Pairing)
@@ -92,7 +93,7 @@ req = urllib.request.Request(f'https://api.telegram.org/bot{token}/sendMessage',
 resp = json.loads(urllib.request.urlopen(req).read())
 assert resp.get('ok'), 'Failed to send message'
 print('Test message sent!')
-" "$TELEGRAM_TOKEN" "$CHAT_ID"
+" "$TELEGRAM_TOKEN" "$TELEGRAM_CHAT_ID"
 ```
 Wait for user to confirm they received the Telegram message before proceeding.
 

@@ -1,22 +1,27 @@
 ---
 name: openclaw-watchdog
 description: Self-healing monitoring system for OpenClaw gateway. Auto-detects failures, fixes crashes, and sends Telegram alerts.
+homepage: https://github.com/Abdullah4AI/openclaw-watchdog
 metadata:
   openclaw:
     emoji: "🐕"
     requires:
       bins: ["python3", "openssl"]
-      credentials:
+      env:
         - name: TELEGRAM_BOT_TOKEN
           description: "Telegram bot token from @BotFather for sending alerts"
-          scope: local
+          required: true
         - name: TELEGRAM_CHAT_ID
           description: "User's Telegram chat ID for receiving alerts"
-          scope: local
-    installs:
-      service: true
-      type: "launchagent|systemd-user"
-      persistence: "user-level"
+          required: true
+    install:
+      - id: setup
+        kind: script
+        script: "scripts/setup.sh"
+        args: ["--telegram-token", "$TELEGRAM_BOT_TOKEN", "--telegram-chat-id", "$TELEGRAM_CHAT_ID"]
+        label: "Install watchdog service (LaunchAgent/systemd user)"
+        persistence: "user-level"
+        service: true
 ---
 
 # openclaw-watchdog
